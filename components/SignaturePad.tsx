@@ -1,10 +1,13 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 import SignatureCanvas from 'react-signature-canvas';
+
+const SIGNATURE_BG = '#ffffff';
+const SIGNATURE_PEN = '#111111';
 
 interface SignaturePadProps {
   onSave: (blob: Blob) => void;
@@ -12,6 +15,23 @@ interface SignaturePadProps {
 
 export default function SignaturePad({ onSave }: SignaturePadProps) {
   const ref = useRef<SignatureCanvas>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(320);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const update = () => {
+      const next = Math.floor(el.clientWidth) || 320;
+      setWidth(next);
+    };
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const handleClear = () => {
     ref.current?.clear();
@@ -26,31 +46,40 @@ export default function SignaturePad({ onSave }: SignaturePadProps) {
   };
 
   return (
-    <Stack spacing={1}>
+    <Stack spacing={1.5}>
       <Box
+        ref={containerRef}
         sx={{
-          border: '1px solid',
+          border: '2px solid',
           borderColor: 'divider',
-          borderRadius: 1,
-          bgcolor: 'background.paper',
+          borderRadius: 2,
+          bgcolor: SIGNATURE_BG,
           touchAction: 'none',
+          overflow: 'hidden',
         }}
       >
         <SignatureCanvas
           ref={ref}
+          penColor={SIGNATURE_PEN}
+          backgroundColor={SIGNATURE_BG}
           canvasProps={{
-            width: 320,
-            height: 160,
-            style: { width: '100%', height: 160 },
+            width,
+            height: 180,
+            style: {
+              width: '100%',
+              height: 180,
+              display: 'block',
+              backgroundColor: SIGNATURE_BG,
+            },
           }}
         />
       </Box>
       <Stack direction="row" spacing={1}>
-        <Button size="small" onClick={handleClear}>
+        <Button size="large" variant="outlined" fullWidth onClick={handleClear}>
           Clear
         </Button>
-        <Button size="small" variant="contained" onClick={handleSave}>
-          Save Signature
+        <Button size="large" variant="contained" fullWidth onClick={handleSave}>
+          Save signature
         </Button>
       </Stack>
     </Stack>

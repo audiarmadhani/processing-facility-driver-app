@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import BottomNavigation from '@mui/material/BottomNavigation';
 import BottomNavigationAction from '@mui/material/BottomNavigationAction';
@@ -51,58 +52,78 @@ export default function DriverBottomNav() {
   }, [pathname]);
 
   return (
-    <Paper
-      elevation={8}
+    <Box
       sx={{
         position: 'fixed',
         bottom: 0,
         left: 0,
         right: 0,
         zIndex: (theme) => theme.zIndex.appBar,
-        borderTop: 1,
-        borderColor: 'divider',
+        display: 'flex',
+        justifyContent: 'center',
         pb: 'env(safe-area-inset-bottom)',
+        pointerEvents: 'none',
       }}
     >
-      <BottomNavigation
-        value={activeTab}
-        onChange={(_, value: TabValue) => {
-          if (value !== activeTab) router.push(value);
-        }}
-        showLabels
+      <Paper
+        elevation={12}
         sx={{
-          height: 64,
-          bgcolor: 'background.paper',
-          '& .MuiBottomNavigationAction-root': {
-            minWidth: 0,
-            py: 1,
-          },
-          '& .MuiBottomNavigationAction-label': {
-            fontSize: '0.7rem',
-          },
+          pointerEvents: 'auto',
+          width: '100%',
+          maxWidth: 520,
+          borderRadius: '16px 16px 0 0',
+          borderTop: 1,
+          borderColor: 'divider',
+          overflow: 'hidden',
         }}
       >
-        {TABS.map((tab) => {
-          const Icon = tab.icon;
-          const icon =
-            tab.value === '/sync' && pendingCount > 0 ? (
-              <Badge badgeContent={pendingCount} color="warning">
+        <BottomNavigation
+          value={activeTab}
+          onChange={(_, value: TabValue) => {
+            if (value !== activeTab) router.push(value);
+          }}
+          showLabels
+          sx={{
+            height: BOTTOM_NAV_HEIGHT,
+            bgcolor: 'background.paper',
+            '& .MuiBottomNavigationAction-root': {
+              minWidth: 0,
+              py: 1,
+              minHeight: 48,
+            },
+            '& .MuiBottomNavigationAction-label': {
+              fontSize: '0.72rem',
+              fontWeight: 600,
+            },
+            '& .Mui-selected': {
+              color: 'primary.main',
+            },
+          }}
+        >
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const icon =
+              tab.value === '/sync' && pendingCount > 0 ? (
+                <Badge badgeContent={pendingCount} color="warning">
+                  <Icon />
+                </Badge>
+              ) : (
                 <Icon />
-              </Badge>
-            ) : (
-              <Icon />
-            );
+              );
 
-          return (
-            <BottomNavigationAction
-              key={tab.value}
-              value={tab.value}
-              label={tab.label}
-              icon={icon}
-            />
-          );
-        })}
-      </BottomNavigation>
-    </Paper>
+            return (
+              <BottomNavigationAction
+                key={tab.value}
+                value={tab.value}
+                label={tab.label}
+                icon={icon}
+              />
+            );
+          })}
+        </BottomNavigation>
+      </Paper>
+    </Box>
   );
 }
+
+const BOTTOM_NAV_HEIGHT = 64;

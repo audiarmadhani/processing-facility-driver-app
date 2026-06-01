@@ -41,6 +41,8 @@ export interface PickupDraft {
   farm_photo_url?: string;
   pickup_photo_url?: string;
   signature_url?: string;
+  /** 6-character code for receiving station to link batch ↔ pickup */
+  handoff_code?: string;
   sync_status: SyncStatus;
   sync_error?: string;
   created_by?: string;
@@ -64,4 +66,5 @@ export interface PickupSyncPayload {
   notes?: string;
   distance_km: number;
   estimated_fuel_liters: number;
+  handoff_code: string;
 }

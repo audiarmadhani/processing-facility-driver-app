@@ -16,6 +16,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLiveQuery } from 'dexie-react-hooks';
 import DriverFieldButton from '@/components/DriverFieldButton';
+import DriverMobileCard from '@/components/DriverMobileCard';
 import { getAllFarms, saveFarm, savePickupDraft } from '@/db/dexie';
 import { refreshFarmsCache } from '@/lib/sync/sync-engine';
 import { farmSchema, type FarmFormValues } from '@/lib/validation/pickup-schemas';
@@ -104,10 +105,11 @@ export default function FarmSelectPage() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h5" fontWeight={600}>
-        Select Farm
+      <Typography variant="h6" fontWeight={700}>
+        Select farm
       </Typography>
 
+      <DriverMobileCard>
       <Autocomplete
         options={farms ?? []}
         getOptionLabel={(o) =>
@@ -120,13 +122,14 @@ export default function FarmSelectPage() {
         )}
         noOptionsText="No farms — create one below"
       />
+      </DriverMobileCard>
 
       <DriverFieldButton onClick={onSelectFarm} disabled={!selected}>
-        Continue with Selected Farm
+        Continue with selected farm
       </DriverFieldButton>
 
       <DriverFieldButton variant="outlined" onClick={() => setDialogOpen(true)}>
-        Create New Farm
+        Create new farm
       </DriverFieldButton>
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">

@@ -1,6 +1,7 @@
 import { db, savePickupDraft } from '@/db/dexie';
 import type { PickupDraft, PickupSyncPayload } from '@/types';
 import { fetchWithTimeout } from '@/lib/sync/fetch-with-timeout';
+import { generateHandoffCode } from '@/lib/pickup/handoff-code';
 
 const syncPromises = new Map<string, Promise<boolean>>();
 
@@ -21,6 +22,7 @@ function buildSyncPayload(draft: PickupDraft): PickupSyncPayload {
     notes: draft.notes,
     distance_km: draft.distance_km ?? 0,
     estimated_fuel_liters: draft.estimated_fuel_liters ?? 0,
+    handoff_code: draft.handoff_code ?? generateHandoffCode(),
   };
 
   if (!draft.farmId) {
@@ -46,15 +48,24 @@ async function doSyncPickupDraft(localId: string): Promise<boolean> {
   if (!navigator.onLine) return false;
   if (!draft.departure_timestamp) return false;
 
+  const handoffCode = draft.handoff_code ?? generateHandoffCode();
+  if (!draft.handoff_code) {
+    await savePickupDraft({ ...draft, handoff_code: handoffCode });
+  }
+
   await savePickupDraft({
     ...draft,
+    handoff_code: handoffCode,
     sync_status: 'syncing',
     sync_error: undefined,
   });
 
   try {
     const formData = new FormData();
-    formData.append('metadata', JSON.stringify(buildSyncPayload(draft)));
+    formData.append(
+      'metadata',
+      JSON.stringify(buildSyncPayload({ ...draft, handoff_code: handoffCode }))
+    );
 
     if (draft.farm_photo_blob) {
       formData.append(
@@ -103,8 +114,13 @@ async function doSyncPickupDraft(localId: string): Promise<boolean> {
     };
 
     const latest = await db.pickupDrafts.get(localId);
+    const syncedHandoffCode =
+      (data as { handoff_code?: string }).handoff_code ??
+      latest?.handoff_code ??
+      handoffCode;
     await savePickupDraft({
       ...(latest ?? draft),
+      handoff_code: syncedHandoffCode,
       serverId: data.id,
       farmId: data.farm_id,
       farm_photo_url: data.farm_photo_url ?? draft.farm_photo_url,

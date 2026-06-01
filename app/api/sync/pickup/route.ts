@@ -179,9 +179,12 @@ export async function POST(request: Request) {
         farm_photo_url: farm_photo_url ?? null,
         pickup_photo_url: pickup_photo_url ?? null,
         signature_url: signature_url ?? null,
+        handoff_code: payload.handoff_code,
         sync_status: 'synced',
       })
-      .select('id, farm_id, farm_photo_url, pickup_photo_url, signature_url')
+      .select(
+        'id, farm_id, farm_photo_url, pickup_photo_url, signature_url, handoff_code'
+      )
       .single();
 
     if (pickupError) throw pickupError;

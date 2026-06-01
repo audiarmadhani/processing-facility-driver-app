@@ -26,22 +26,27 @@ export default function DriverAppShell({ children }: { children: React.ReactNode
         display: 'flex',
         flexDirection: 'column',
         minHeight: '100dvh',
-        bgcolor: 'background.default',
+        bgcolor: (theme) =>
+          theme.palette.mode === 'dark'
+            ? theme.palette.grey[900]
+            : theme.palette.grey[50],
       }}
     >
       <AppBar
         position="sticky"
         elevation={0}
         sx={{
-          borderBottom: 1,
-          borderColor: 'divider',
-          bgcolor: 'background.paper',
+          bgcolor: 'primary.main',
+          color: 'primary.contrastText',
         }}
       >
-        <Toolbar sx={{ minHeight: 56 }}>
+        <Toolbar sx={{ minHeight: 56, maxWidth: 520, width: '100%', mx: 'auto' }}>
           <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="h6" fontWeight={600} lineHeight={1.2}>
+            <Typography variant="subtitle1" fontWeight={700} lineHeight={1.2}>
               BTM HEQA
+            </Typography>
+            <Typography variant="caption" sx={{ opacity: 0.9 }}>
+              Cherry pickup
             </Typography>
           </Box>
           <IconButton
@@ -49,8 +54,9 @@ export default function DriverAppShell({ children }: { children: React.ReactNode
             onClick={(e) => setMenuAnchor(e.currentTarget)}
             edge="end"
             size="large"
+            sx={{ color: 'inherit' }}
           >
-            <AccountCircleIcon />
+            <AccountCircleIcon fontSize="large" />
           </IconButton>
           <Menu
             anchorEl={menuAnchor}
@@ -87,9 +93,9 @@ export default function DriverAppShell({ children }: { children: React.ReactNode
           display: 'flex',
           flexDirection: 'column',
           width: '100%',
-          maxWidth: 480,
+          maxWidth: 520,
           mx: 'auto',
-          px: 2,
+          px: { xs: 1.5, sm: 2 },
           pt: 2,
           pb: `calc(${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom) + 16px)`,
           minHeight: 0,

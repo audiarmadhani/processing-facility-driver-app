@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
+import Alert from '@mui/material/Alert';
+import DriverMobileCard from '@/components/DriverMobileCard';
 import CircularProgress from '@mui/material/CircularProgress';
 import SyncStatusChip from '@/components/SyncStatusChip';
 import { getPickupDraft } from '@/db/dexie';
@@ -76,6 +76,7 @@ export default function HistoryDetailPage() {
     ['Departure', draft.departure_timestamp ? new Date(draft.departure_timestamp).toLocaleString() : '—'],
     ['GPS', draft.latitude != null ? `${draft.latitude.toFixed(5)}, ${draft.longitude?.toFixed(5)}` : '—'],
     ['Notes', draft.notes || '—'],
+    ['Handoff code', draft.handoff_code || '—'],
   ];
 
   return (
@@ -86,20 +87,25 @@ export default function HistoryDetailPage() {
         </Typography>
         <SyncStatusChip status={draft.sync_status} />
       </Stack>
-      <Card>
-        <CardContent>
+      {draft.handoff_code && (
+        <Alert severity="success" sx={{ fontWeight: 600 }}>
+          Receiving code: {draft.handoff_code}
+        </Alert>
+      )}
+      <DriverMobileCard>
           <Stack spacing={1}>
             {rows.map(([k, v]) => (
-              <Stack key={k} direction="row" justifyContent="space-between">
+              <Stack key={k} direction="row" justifyContent="space-between" gap={2}>
                 <Typography variant="body2" color="text.secondary">
                   {k}
                 </Typography>
-                <Typography variant="body2">{String(v ?? '—')}</Typography>
+                <Typography variant="body2" textAlign="right">
+                  {String(v ?? '—')}
+                </Typography>
               </Stack>
             ))}
           </Stack>
-        </CardContent>
-      </Card>
+      </DriverMobileCard>
       <Typography variant="subtitle2">Farm photo</Typography>
       <ImagePreview blob={draft.farm_photo_blob} url={draft.farm_photo_url} alt="Farm" />
       <Typography variant="subtitle2">Pickup photo</Typography>

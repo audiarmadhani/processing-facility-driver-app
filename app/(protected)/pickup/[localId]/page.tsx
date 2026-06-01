@@ -3,15 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import Stepper from '@mui/material/Stepper';
-import Step from '@mui/material/Step';
-import StepLabel from '@mui/material/StepLabel';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
 import Alert from '@mui/material/Alert';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
@@ -22,7 +18,11 @@ import CircularProgress from '@mui/material/CircularProgress';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import DriverFieldButton from '@/components/DriverFieldButton';
+import DriverMobileCard from '@/components/DriverMobileCard';
+import DriverStepDots from '@/components/DriverStepDots';
 import GeolocationBlockedHelp from '@/components/GeolocationBlockedHelp';
+import PickupHandoffDialog from '@/components/PickupHandoffDialog';
+import { generateHandoffCode } from '@/lib/pickup/handoff-code';
 import { getPickupDraft, savePickupDraft } from '@/db/dexie';
 import {
   GeoLocationError,
@@ -59,6 +59,8 @@ export default function PickupWorkflowPage() {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [handoffDialogOpen, setHandoffDialogOpen] = useState(false);
+  const [completedHandoffCode, setCompletedHandoffCode] = useState('');
   const farmPhotoRef = useRef<HTMLInputElement>(null);
   const pickupPhotoRef = useRef<HTMLInputElement>(null);
 
@@ -176,8 +178,10 @@ export default function PickupWorkflowPage() {
         ? calculateFuelLiters(distance, draft.vehicle_used)
         : null;
 
+    const handoffCode = draft.handoff_code ?? generateHandoffCode();
     const updated: PickupDraft = {
       ...draft,
+      handoff_code: handoffCode,
       departure_timestamp: departure,
       time_at_farm_minutes: calculateTimeAtFarmMinutes(
         draft.arrival_timestamp,
@@ -189,13 +193,14 @@ export default function PickupWorkflowPage() {
     };
     await savePickupDraft(updated);
     setDraft(updated);
+    setCompletedHandoffCode(handoffCode);
     setConfirmOpen(false);
+    setHandoffDialogOpen(true);
 
     if (navigator.onLine) {
-      await syncPickupDraft(localId);
+      void syncPickupDraft(localId);
     }
     setCompleting(false);
-    router.push('/');
   };
 
   if (loading || !draft) {
@@ -208,24 +213,19 @@ export default function PickupWorkflowPage() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h5" fontWeight={600}>
-        {draft.farmSnapshot.farm_name}
-      </Typography>
-      <Typography variant="body2" color="text.secondary">
-        {draft.farmSnapshot.farmer_name} · {draft.farmSnapshot.village}
-      </Typography>
+      <Box>
+        <Typography variant="h6" fontWeight={700} lineHeight={1.2}>
+          {draft.farmSnapshot.farm_name}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {draft.farmSnapshot.farmer_name} · {draft.farmSnapshot.village}
+        </Typography>
+      </Box>
 
-      <Stepper activeStep={activeStep} orientation="vertical">
-        {STEPS.map((label) => (
-          <Step key={label}>
-            <StepLabel>{label}</StepLabel>
-          </Step>
-        ))}
-      </Stepper>
+      <DriverStepDots steps={STEPS} activeStep={activeStep} />
 
       {activeStep === 0 && (
-        <Card>
-          <CardContent>
+        <DriverMobileCard>
             <Stack spacing={2}>
               {gpsError && (
                 <Alert
@@ -288,13 +288,11 @@ export default function PickupWorkflowPage() {
                 </>
               )}
             </Stack>
-          </CardContent>
-        </Card>
+        </DriverMobileCard>
       )}
 
       {activeStep === 1 && (
-        <Card>
-          <CardContent>
+        <DriverMobileCard>
             <form onSubmit={onInfoSubmit}>
               <Stack spacing={2}>
                 <Controller
@@ -306,6 +304,7 @@ export default function PickupWorkflowPage() {
                       label="Estimated Weight (kg)"
                       type="number"
                       inputMode="decimal"
+                      size="medium"
                       fullWidth
                       required
                       error={!!errors.estimated_weight}
@@ -375,15 +374,18 @@ export default function PickupWorkflowPage() {
                 <DriverFieldButton type="submit">Continue</DriverFieldButton>
               </Stack>
             </form>
-          </CardContent>
-        </Card>
+        </DriverMobileCard>
       )}
 
       {activeStep === 2 && (
-        <Card>
-          <CardContent>
+        <DriverMobileCard>
             <Stack spacing={2}>
-              <Typography variant="subtitle2">Farm owner signature</Typography>
+              <Typography variant="subtitle1" fontWeight={600}>
+                Farm owner signature
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Sign on the white pad below
+              </Typography>
               <SignaturePad onSave={handleSignature} />
               {draft.signature_blob && (
                 <Alert severity="success">Signature saved</Alert>
@@ -412,23 +414,28 @@ export default function PickupWorkflowPage() {
                 Continue
               </DriverFieldButton>
             </Stack>
-          </CardContent>
-        </Card>
+        </DriverMobileCard>
       )}
 
       {activeStep === 3 && (
-        <Card>
-          <CardContent>
+        <DriverMobileCard>
             <Stack spacing={2}>
-              <Typography variant="body2">
-                Weight: {draft.estimated_weight} kg · {draft.species} · {draft.variety}
+              <Typography variant="body2" color="text.secondary">
+                Summary
               </Typography>
+              <Typography variant="body1" fontWeight={600}>
+                {draft.estimated_weight} kg · {draft.species} · {draft.variety}
+              </Typography>
+              {draft.handoff_code && (
+                <Alert severity="info">
+                  Handoff code: <strong>{draft.handoff_code}</strong>
+                </Alert>
+              )}
               <DriverFieldButton onClick={() => setConfirmOpen(true)}>
-                Complete Pickup
+                Complete pickup
               </DriverFieldButton>
             </Stack>
-          </CardContent>
-        </Card>
+        </DriverMobileCard>
       )}
 
       <Dialog open={confirmOpen} onClose={() => !completing && setConfirmOpen(false)}>
@@ -452,6 +459,16 @@ export default function PickupWorkflowPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <PickupHandoffDialog
+        open={handoffDialogOpen}
+        handoffCode={completedHandoffCode}
+        farmName={draft.farmSnapshot.farm_name}
+        onDone={() => {
+          setHandoffDialogOpen(false);
+          router.push('/');
+        }}
+      />
     </Stack>
   );
 }
