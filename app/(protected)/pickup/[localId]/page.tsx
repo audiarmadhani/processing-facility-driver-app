@@ -22,6 +22,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import DriverFieldButton from '@/components/DriverFieldButton';
+import GeolocationBlockedHelp from '@/components/GeolocationBlockedHelp';
 import { getPickupDraft, savePickupDraft } from '@/db/dexie';
 import {
   GeoLocationError,
@@ -54,6 +55,7 @@ export default function PickupWorkflowPage() {
   const [draft, setDraft] = useState<PickupDraft | null>(null);
   const [loading, setLoading] = useState(true);
   const [gpsError, setGpsError] = useState('');
+  const [gpsDenied, setGpsDenied] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -105,6 +107,7 @@ export default function PickupWorkflowPage() {
 
   const handleArrived = async () => {
     setGpsError('');
+    setGpsDenied(false);
     setGpsLoading(true);
     try {
       const pos = await getCurrentPosition();
@@ -114,6 +117,9 @@ export default function PickupWorkflowPage() {
         arrival_timestamp: new Date().toISOString(),
       });
     } catch (e) {
+      const denied =
+        e instanceof GeoLocationError && e.reason === 'denied';
+      setGpsDenied(denied);
       const message =
         e instanceof GeoLocationError
           ? e.message
@@ -222,10 +228,17 @@ export default function PickupWorkflowPage() {
           <CardContent>
             <Stack spacing={2}>
               {gpsError && (
-                <Alert severity="error" onClose={() => setGpsError('')}>
+                <Alert
+                  severity="error"
+                  onClose={() => {
+                    setGpsError('');
+                    setGpsDenied(false);
+                  }}
+                >
                   {gpsError}
                 </Alert>
               )}
+              {gpsDenied && <GeolocationBlockedHelp />}
               {!draft.arrival_timestamp && !gpsError && (
                 <Typography variant="body2" color="text.secondary">
                   {gpsLoading

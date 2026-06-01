@@ -17,20 +17,23 @@ export function isStandalonePwa(): boolean {
 }
 
 export function locationDeniedHelpText(): string {
+  const host =
+    typeof window !== 'undefined' ? window.location.host : 'this website';
+
   if (!isIOSDevice()) {
     return (
-      'Location is blocked for this site. Allow location in your browser site settings, then tap Try GPS Again.'
+      `Location is blocked for ${host}. Allow location in your browser site settings, then tap Try GPS Again.`
     );
   }
 
   if (isStandalonePwa()) {
     return (
-      'This app does not have location access yet. Open Settings → Cherry Pickup → Location → "While Using the App" (not only Safari). Under Privacy & Security → Location Services, turn Location ON. Then return here and tap Try GPS Again — tap Allow if iPhone asks.'
+      `Location blocked for Cherry Pickup (not Safari). Settings → Cherry Pickup → Location → While Using the App. Then tap Try GPS Again and Allow. Site: ${host}`
     );
   }
 
   return (
-    'Safari’s global Location setting does not auto-allow this site. Tap Try GPS Again and choose Allow if asked. If you tapped Don’t Allow before: open this page in Safari → tap the aA icon in the address bar → Website Settings → Location → Allow. Or Settings → Apps → Safari → Location (must be While Using). Installed app: Settings → Cherry Pickup → Location.'
+    `Safari Location in Settings is only step 1. For ${host}: tap aA in the address bar → Website Settings → Location → Allow, then Try GPS Again. If you chose Don't Allow earlier, the prompt will not return until you change Website Settings.`
   );
 }
 

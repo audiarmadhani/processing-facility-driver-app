@@ -120,39 +120,71 @@ export async function getCurrentPosition(): Promise<GeoPosition> {
 
   await assertGeolocationAllowed();
 
-  const attempts: Array<{ label: string; options: PositionOptions }> = [
-    {
-      label: 'cached',
-      options: {
-        enableHighAccuracy: false,
-        timeout: 8000,
-        maximumAge: 120_000, // up to 2 minutes old
-      },
-    },
-    {
-      label: 'low-accuracy',
-      options: {
-        enableHighAccuracy: false,
-        timeout: 25_000,
-        maximumAge: 30_000,
-      },
-    },
-    {
-      label: 'high-accuracy',
-      options: {
-        enableHighAccuracy: true,
-        timeout: 45_000,
-        maximumAge: 0,
-      },
-    },
-  ];
+  // iOS: first request must be a fresh prompt-friendly call (no stale maximumAge).
+  const attempts: Array<{ label: string; options: PositionOptions }> =
+    isIOSDevice()
+      ? [
+          {
+            label: 'prompt',
+            options: {
+              enableHighAccuracy: false,
+              timeout: 30_000,
+              maximumAge: 0,
+            },
+          },
+          {
+            label: 'low-accuracy',
+            options: {
+              enableHighAccuracy: false,
+              timeout: 25_000,
+              maximumAge: 60_000,
+            },
+          },
+          {
+            label: 'high-accuracy',
+            options: {
+              enableHighAccuracy: true,
+              timeout: 45_000,
+              maximumAge: 0,
+            },
+          },
+        ]
+      : [
+          {
+            label: 'cached',
+            options: {
+              enableHighAccuracy: false,
+              timeout: 8000,
+              maximumAge: 120_000,
+            },
+          },
+          {
+            label: 'low-accuracy',
+            options: {
+              enableHighAccuracy: false,
+              timeout: 25_000,
+              maximumAge: 30_000,
+            },
+          },
+          {
+            label: 'high-accuracy',
+            options: {
+              enableHighAccuracy: true,
+              timeout: 45_000,
+              maximumAge: 0,
+            },
+          },
+        ];
 
   let lastError: GeoLocationError | null = null;
 
   for (const attempt of attempts) {
     try {
       const pos = await getCurrentPositionOnce(attempt.options);
-      return toPosition(pos, attempt.label === 'cached');
+      return toPosition(
+        pos,
+        attempt.label === 'cached' || attempt.label === 'low-accuracy'
+      );
     } catch (err) {
       if (err instanceof GeolocationPositionError) {
         const mapped = mapGeoError(err);
