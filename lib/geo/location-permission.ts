@@ -19,23 +19,30 @@ export function isStandalonePwa(): boolean {
 export function locationDeniedHelpText(): string {
   if (!isIOSDevice()) {
     return (
-      'Location is blocked. Allow location for this website in your browser settings, then tap Try GPS Again.'
+      'Location is blocked for this site. Allow location in your browser site settings, then tap Try GPS Again.'
     );
   }
 
   if (isStandalonePwa()) {
     return (
-      'Location is blocked on iPhone. Open Settings → scroll to Cherry Pickup (or Safari) → Location → choose "While Using the App" or "Ask Next Time". Also check Settings → Privacy & Security → Location Services is ON. Then return here and tap Try GPS Again.'
+      'This app does not have location access yet. Open Settings → Cherry Pickup → Location → "While Using the App" (not only Safari). Under Privacy & Security → Location Services, turn Location ON. Then return here and tap Try GPS Again — tap Allow if iPhone asks.'
     );
   }
 
   return (
-    'Location is blocked on iPhone. When you tap Try GPS Again, choose Allow if asked. If you previously tapped Don\'t Allow: Settings → Apps → Safari → Location → Allow. Also enable Settings → Privacy & Security → Location Services. For the installed app: Settings → Cherry Pickup → Location.'
+    'Safari’s global Location setting does not auto-allow this site. Tap Try GPS Again and choose Allow if asked. If you tapped Don’t Allow before: open this page in Safari → tap the aA icon in the address bar → Website Settings → Location → Allow. Or Settings → Apps → Safari → Location (must be While Using). Installed app: Settings → Cherry Pickup → Location.'
   );
 }
 
-/** Query permission state when supported (avoids silent failures on iOS). */
+/**
+ * Desktop browsers expose a reliable denied state; iOS Safari does not — always
+ * call getCurrentPosition and handle PERMISSION_DENIED there instead.
+ */
 export async function assertGeolocationAllowed(): Promise<void> {
+  if (isIOSDevice()) {
+    return;
+  }
+
   if (typeof navigator === 'undefined' || !navigator.permissions?.query) {
     return;
   }
@@ -52,7 +59,6 @@ export async function assertGeolocationAllowed(): Promise<void> {
     if (error instanceof GeoLocationError) {
       throw error;
     }
-    // Permissions API may be unsupported; getCurrentPosition will still prompt.
   }
 }
 

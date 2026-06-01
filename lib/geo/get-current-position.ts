@@ -9,6 +9,7 @@ export interface GeoPosition {
 import { GeoLocationError, type GeoFailureReason } from '@/lib/geo/errors';
 import {
   assertGeolocationAllowed,
+  isIOSDevice,
   isSecureContextForGeo,
   locationDeniedHelpText,
 } from '@/lib/geo/location-permission';
@@ -32,6 +33,45 @@ function getCurrentPositionOnce(
 ): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(resolve, reject, options);
+  });
+}
+
+/** iOS Safari often succeeds with watchPosition when getCurrentPosition fails. */
+function watchPositionOnce(
+  options: PositionOptions,
+  maxWaitMs: number
+): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    let watchId: number | undefined;
+    const timeoutId = setTimeout(() => {
+      if (watchId !== undefined) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+      reject(
+        new GeoLocationError(
+          'timeout',
+          'GPS timed out. Stay outdoors with a clear view of the sky and tap Try again.'
+        )
+      );
+    }, maxWaitMs);
+
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        clearTimeout(timeoutId);
+        if (watchId !== undefined) {
+          navigator.geolocation.clearWatch(watchId);
+        }
+        resolve(pos);
+      },
+      (err) => {
+        clearTimeout(timeoutId);
+        if (watchId !== undefined) {
+          navigator.geolocation.clearWatch(watchId);
+        }
+        reject(err);
+      },
+      options
+    );
   });
 }
 
@@ -117,7 +157,6 @@ export async function getCurrentPosition(): Promise<GeoPosition> {
       if (err instanceof GeolocationPositionError) {
         const mapped = mapGeoError(err);
         lastError = mapped;
-        // Permission denied won't succeed on retry — stop early
         if (mapped.reason === 'denied') {
           throw mapped;
         }
@@ -126,6 +165,29 @@ export async function getCurrentPosition(): Promise<GeoPosition> {
           'unavailable',
           'Unable to get GPS location.'
         );
+      }
+    }
+  }
+
+  if (isIOSDevice()) {
+    try {
+      const pos = await watchPositionOnce(
+        { enableHighAccuracy: true, maximumAge: 0 },
+        30_000
+      );
+      return toPosition(pos, false);
+    } catch (err) {
+      if (err instanceof GeoLocationError) {
+        lastError = err;
+        if (err.reason === 'denied') {
+          throw err;
+        }
+      } else if (err instanceof GeolocationPositionError) {
+        const mapped = mapGeoError(err);
+        if (mapped.reason === 'denied') {
+          throw mapped;
+        }
+        lastError = mapped;
       }
     }
   }

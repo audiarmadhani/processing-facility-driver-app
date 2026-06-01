@@ -230,7 +230,7 @@ export default function PickupWorkflowPage() {
                 <Typography variant="body2" color="text.secondary">
                   {gpsLoading
                     ? 'Getting GPS… may take up to 45 seconds. Stay outdoors if possible.'
-                    : 'Tap the button below, then tap Allow when iPhone asks for location.'}
+                    : 'Tap Arrived at Farm, then tap Allow on the iPhone prompt. Safari’s Location setting alone is not enough — this app needs its own Allow.'}
                 </Typography>
               )}
               <DriverFieldButton
