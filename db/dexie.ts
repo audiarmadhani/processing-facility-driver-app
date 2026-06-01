@@ -19,7 +19,8 @@ export const db = new DriverDatabase();
 export async function countPendingSync(): Promise<number> {
   return db.pickupDrafts
     .where('sync_status')
-    .anyOf(['pending', 'failed'])
+    .anyOf(['pending', 'failed', 'syncing'])
+    .filter((p) => !!p.departure_timestamp)
     .count();
 }
 

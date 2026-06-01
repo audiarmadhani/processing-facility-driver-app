@@ -3,21 +3,31 @@ import { auth } from '@/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { PickupSyncPayload } from '@/types';
 
+/** Vercel Hobby caps at 10s; Pro allows up to 60s for photo uploads. */
+export const maxDuration = 60;
+
 async function uploadFile(
   supabase: ReturnType<typeof createAdminClient>,
   bucket: string,
   path: string,
-  file: File
+  file: Blob,
+  contentType: string
 ): Promise<string> {
   const buffer = Buffer.from(await file.arrayBuffer());
   const { error } = await supabase.storage.from(bucket).upload(path, buffer, {
-    contentType: file.type || 'image/webp',
+    contentType,
     upsert: true,
   });
   if (error) throw error;
 
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
   return data.publicUrl;
+}
+
+function blobFromFormEntry(entry: FormDataEntryValue | null): Blob | null {
+  if (!entry || typeof entry === 'string') return null;
+  if (entry.size <= 0) return null;
+  return entry;
 }
 
 export async function POST(request: Request) {
@@ -76,38 +86,76 @@ export async function POST(request: Request) {
     }
 
     const basePath = `${userId}/${payload.client_id}`;
-    const farmPhoto = formData.get('farm_photo') as File | null;
-    const pickupPhoto = formData.get('pickup_photo') as File | null;
-    const signature = formData.get('signature') as File | null;
+    const farmPhoto = blobFromFormEntry(formData.get('farm_photo'));
+    const pickupPhoto = blobFromFormEntry(formData.get('pickup_photo'));
+    const signature = blobFromFormEntry(formData.get('signature'));
 
+    const warnings: string[] = [];
     let farm_photo_url: string | undefined;
     let pickup_photo_url: string | undefined;
     let signature_url: string | undefined;
 
-    if (farmPhoto?.size) {
-      farm_photo_url = await uploadFile(
-        supabase,
-        'farm-photos',
-        `${basePath}/farm-${Date.now()}.webp`,
-        farmPhoto
+    const uploads: Array<Promise<void>> = [];
+
+    if (farmPhoto) {
+      uploads.push(
+        uploadFile(
+          supabase,
+          'farm-photos',
+          `${basePath}/farm-${Date.now()}.webp`,
+          farmPhoto,
+          farmPhoto.type || 'image/webp'
+        )
+          .then((url) => {
+            farm_photo_url = url;
+          })
+          .catch((e) => {
+            warnings.push(
+              `Farm photo not saved: ${e instanceof Error ? e.message : 'upload failed'}`
+            );
+          })
       );
     }
-    if (pickupPhoto?.size) {
-      pickup_photo_url = await uploadFile(
-        supabase,
-        'pickup-photos',
-        `${basePath}/pickup-${Date.now()}.webp`,
-        pickupPhoto
+    if (pickupPhoto) {
+      uploads.push(
+        uploadFile(
+          supabase,
+          'pickup-photos',
+          `${basePath}/pickup-${Date.now()}.webp`,
+          pickupPhoto,
+          pickupPhoto.type || 'image/webp'
+        )
+          .then((url) => {
+            pickup_photo_url = url;
+          })
+          .catch((e) => {
+            warnings.push(
+              `Pickup photo not saved: ${e instanceof Error ? e.message : 'upload failed'}`
+            );
+          })
       );
     }
-    if (signature?.size) {
-      signature_url = await uploadFile(
-        supabase,
-        'signatures',
-        `${basePath}/signature-${Date.now()}.png`,
-        signature
+    if (signature) {
+      uploads.push(
+        uploadFile(
+          supabase,
+          'signatures',
+          `${basePath}/signature-${Date.now()}.png`,
+          signature,
+          signature.type || 'image/png'
+        )
+          .then((url) => {
+            signature_url = url;
+          })
+          .catch((e) => {
+            warnings.push(
+              `Signature not saved: ${e instanceof Error ? e.message : 'upload failed'}`
+            );
+          })
       );
     }
+
+    await Promise.all(uploads);
 
     const { data: pickup, error: pickupError } = await supabase
       .from('driver_pickups')
@@ -138,9 +186,13 @@ export async function POST(request: Request) {
 
     if (pickupError) throw pickupError;
 
-    return NextResponse.json(pickup);
+    return NextResponse.json({
+      ...pickup,
+      warnings: warnings.length ? warnings : undefined,
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Sync failed';
+    console.error('[sync/pickup]', message, e);
     return NextResponse.json({ message }, { status: 500 });
   }
 }

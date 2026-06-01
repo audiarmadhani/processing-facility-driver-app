@@ -1,62 +1,96 @@
 import { db, savePickupDraft } from '@/db/dexie';
 import type { PickupDraft, PickupSyncPayload } from '@/types';
+import { fetchWithTimeout } from '@/lib/sync/fetch-with-timeout';
 
-export async function syncPickupDraft(localId: string): Promise<boolean> {
+const syncPromises = new Map<string, Promise<boolean>>();
+
+function buildSyncPayload(draft: PickupDraft): PickupSyncPayload {
+  const payload: PickupSyncPayload = {
+    client_id: draft.localId,
+    farm_id: draft.farmId,
+    latitude: draft.latitude!,
+    longitude: draft.longitude!,
+    arrival_timestamp: draft.arrival_timestamp!,
+    departure_timestamp: draft.departure_timestamp!,
+    time_at_farm_minutes: draft.time_at_farm_minutes ?? 0,
+    estimated_weight: draft.estimated_weight!,
+    species: draft.species!,
+    variety: draft.variety!,
+    road_condition: draft.road_condition!,
+    vehicle_used: draft.vehicle_used!,
+    notes: draft.notes,
+    distance_km: draft.distance_km ?? 0,
+    estimated_fuel_liters: draft.estimated_fuel_liters ?? 0,
+  };
+
+  if (!draft.farmId) {
+    payload.farm = { ...draft.farmSnapshot };
+  }
+
+  return payload;
+}
+
+async function markSyncFailed(localId: string, message: string): Promise<void> {
+  const current = await db.pickupDrafts.get(localId);
+  if (!current) return;
+  await savePickupDraft({
+    ...current,
+    sync_status: 'failed',
+    sync_error: message,
+  });
+}
+
+async function doSyncPickupDraft(localId: string): Promise<boolean> {
   const draft = await db.pickupDrafts.get(localId);
   if (!draft) return false;
   if (!navigator.onLine) return false;
+  if (!draft.departure_timestamp) return false;
 
-  await savePickupDraft({ ...draft, sync_status: 'syncing', sync_error: undefined });
+  await savePickupDraft({
+    ...draft,
+    sync_status: 'syncing',
+    sync_error: undefined,
+  });
 
   try {
     const formData = new FormData();
-    const payload: PickupSyncPayload = {
-      client_id: draft.localId,
-      farm_id: draft.farmId,
-      farm: draft.farmId
-        ? undefined
-        : {
-            ...draft.farmSnapshot,
-            local_farm_id: draft.farmId,
-          },
-      latitude: draft.latitude!,
-      longitude: draft.longitude!,
-      arrival_timestamp: draft.arrival_timestamp!,
-      departure_timestamp: draft.departure_timestamp!,
-      time_at_farm_minutes: draft.time_at_farm_minutes ?? 0,
-      estimated_weight: draft.estimated_weight!,
-      species: draft.species!,
-      variety: draft.variety!,
-      road_condition: draft.road_condition!,
-      vehicle_used: draft.vehicle_used!,
-      notes: draft.notes,
-      distance_km: draft.distance_km!,
-      estimated_fuel_liters: draft.estimated_fuel_liters!,
-    };
+    formData.append('metadata', JSON.stringify(buildSyncPayload(draft)));
 
-    if (!draft.farmId) {
-      payload.farm = { ...draft.farmSnapshot };
-    }
-
-    formData.append('metadata', JSON.stringify(payload));
     if (draft.farm_photo_blob) {
-      formData.append('farm_photo', draft.farm_photo_blob, 'farm.webp');
+      formData.append(
+        'farm_photo',
+        draft.farm_photo_blob,
+        'farm.webp'
+      );
     }
     if (draft.pickup_photo_blob) {
-      formData.append('pickup_photo', draft.pickup_photo_blob, 'pickup.webp');
+      formData.append(
+        'pickup_photo',
+        draft.pickup_photo_blob,
+        'pickup.webp'
+      );
     }
     if (draft.signature_blob) {
-      formData.append('signature', draft.signature_blob, 'signature.png');
+      formData.append(
+        'signature',
+        draft.signature_blob,
+        'signature.png'
+      );
     }
 
-    const res = await fetch('/api/sync/pickup', {
+    const res = await fetchWithTimeout('/api/sync/pickup', {
       method: 'POST',
       body: formData,
+      credentials: 'include',
+      cache: 'no-store',
     });
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error((err as { message?: string }).message ?? 'Sync failed');
+      const apiMessage = (err as { message?: string }).message;
+      throw new Error(
+        apiMessage ? `${apiMessage} (HTTP ${res.status})` : `Sync failed (HTTP ${res.status})`
+      );
     }
 
     const data = (await res.json()) as {
@@ -65,35 +99,45 @@ export async function syncPickupDraft(localId: string): Promise<boolean> {
       farm_photo_url?: string;
       pickup_photo_url?: string;
       signature_url?: string;
+      warnings?: string[];
     };
 
+    const latest = await db.pickupDrafts.get(localId);
     await savePickupDraft({
-      ...draft,
+      ...(latest ?? draft),
       serverId: data.id,
       farmId: data.farm_id,
       farm_photo_url: data.farm_photo_url ?? draft.farm_photo_url,
       pickup_photo_url: data.pickup_photo_url ?? draft.pickup_photo_url,
       signature_url: data.signature_url ?? draft.signature_url,
       sync_status: 'synced',
-      sync_error: undefined,
+      sync_error:
+        data.warnings?.length ? data.warnings.join(' ') : undefined,
     });
 
     return true;
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Sync failed';
-    await savePickupDraft({
-      ...draft,
-      sync_status: 'failed',
-      sync_error: message,
-    });
+    await markSyncFailed(localId, message);
     return false;
   }
+}
+
+export async function syncPickupDraft(localId: string): Promise<boolean> {
+  const existing = syncPromises.get(localId);
+  if (existing) return existing;
+
+  const promise = doSyncPickupDraft(localId).finally(() => {
+    syncPromises.delete(localId);
+  });
+  syncPromises.set(localId, promise);
+  return promise;
 }
 
 export async function syncAllPending(): Promise<{ synced: number; failed: number }> {
   const pending = await db.pickupDrafts
     .where('sync_status')
-    .anyOf(['pending', 'failed'])
+    .anyOf(['pending', 'failed', 'syncing'])
     .toArray();
 
   let synced = 0;
@@ -111,7 +155,10 @@ export async function syncAllPending(): Promise<{ synced: number; failed: number
 
 export async function refreshFarmsCache(): Promise<void> {
   if (!navigator.onLine) return;
-  const res = await fetch('/api/farms');
+  const res = await fetch('/api/farms', {
+    credentials: 'include',
+    cache: 'no-store',
+  });
   if (!res.ok) return;
   const farms = (await res.json()) as Array<{
     id: string;

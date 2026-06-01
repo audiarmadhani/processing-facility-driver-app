@@ -83,6 +83,8 @@ export default function FarmSelectPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(values),
+          credentials: 'include',
+          cache: 'no-store',
         });
         if (res.ok) {
           const created = await res.json();

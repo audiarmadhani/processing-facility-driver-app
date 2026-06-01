@@ -99,7 +99,7 @@ export default function SyncPage() {
               />
               <SyncStatusChip status={p.sync_status} />
             </Stack>
-            {(p.sync_status === 'failed' || p.sync_status === 'pending') && (
+            {p.sync_status !== 'synced' && (
               <Button
                 size="small"
                 variant="outlined"
@@ -107,7 +107,7 @@ export default function SyncPage() {
                 onClick={() => void handleRetryOne(p.localId)}
                 sx={{ mt: 1, alignSelf: 'flex-end' }}
               >
-                Retry
+                {p.sync_status === 'syncing' ? 'Retry stuck sync' : 'Retry'}
               </Button>
             )}
           </ListItem>

@@ -7,9 +7,9 @@ export async function compressImage(file: File | Blob): Promise<Blob> {
       : new File([file], 'photo.jpg', { type: file.type || 'image/jpeg' });
 
   const compressed = await imageCompression(asFile, {
-    maxSizeMB: 0.8,
-    maxWidthOrHeight: 1280,
-    useWebWorker: true,
+    maxSizeMB: 0.4,
+    maxWidthOrHeight: 1024,
+    useWebWorker: typeof window !== 'undefined' && 'Worker' in window,
     fileType: 'image/webp',
   });
 
