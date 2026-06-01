@@ -6,17 +6,14 @@ export interface GeoPosition {
   cached?: boolean;
 }
 
-export type GeoFailureReason = 'unsupported' | 'denied' | 'unavailable' | 'timeout';
+import { GeoLocationError, type GeoFailureReason } from '@/lib/geo/errors';
+import {
+  assertGeolocationAllowed,
+  isSecureContextForGeo,
+  locationDeniedHelpText,
+} from '@/lib/geo/location-permission';
 
-export class GeoLocationError extends Error {
-  readonly reason: GeoFailureReason;
-
-  constructor(reason: GeoFailureReason, message: string) {
-    super(message);
-    this.name = 'GeoLocationError';
-    this.reason = reason;
-  }
-}
+export { GeoLocationError, type GeoFailureReason };
 
 function toPosition(
   pos: GeolocationPosition,
@@ -41,10 +38,7 @@ function getCurrentPositionOnce(
 function mapGeoError(err: GeolocationPositionError): GeoLocationError {
   switch (err.code) {
     case err.PERMISSION_DENIED:
-      return new GeoLocationError(
-        'denied',
-        'Location access is blocked. Allow location for this site in your browser settings, then try again.'
-      );
+      return new GeoLocationError('denied', locationDeniedHelpText());
     case err.POSITION_UNAVAILABLE:
       return new GeoLocationError(
         'unavailable',
@@ -76,6 +70,15 @@ export async function getCurrentPosition(): Promise<GeoPosition> {
       'Geolocation is not supported on this device.'
     );
   }
+
+  if (!isSecureContextForGeo()) {
+    throw new GeoLocationError(
+      'denied',
+      'Location requires a secure connection (HTTPS). Open the deployed app link, not an insecure URL.'
+    );
+  }
+
+  await assertGeolocationAllowed();
 
   const attempts: Array<{ label: string; options: PositionOptions }> = [
     {

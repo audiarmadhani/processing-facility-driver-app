@@ -226,11 +226,11 @@ export default function PickupWorkflowPage() {
                   {gpsError}
                 </Alert>
               )}
-              {!draft.arrival_timestamp && (
+              {!draft.arrival_timestamp && !gpsError && (
                 <Typography variant="body2" color="text.secondary">
                   {gpsLoading
                     ? 'Getting GPS… may take up to 45 seconds. Stay outdoors if possible.'
-                    : 'Allow location access when prompted. Works best with clear sky view.'}
+                    : 'Tap the button below, then tap Allow when iPhone asks for location.'}
                 </Typography>
               )}
               <DriverFieldButton
