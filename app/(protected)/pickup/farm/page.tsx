@@ -40,10 +40,7 @@ export default function FarmSelectPage() {
     let active = true;
     const loadLocationData = async () => {
       try {
-        const apiBaseUrl =
-          process.env.NEXT_PUBLIC_API_URL ??
-          'https://processing-facility-backend.onrender.com';
-        const res = await fetch(`${apiBaseUrl}/api/location`, {
+        const res = await fetch('/api/location', {
           cache: 'no-store',
         });
         if (!res.ok) return;
@@ -234,10 +231,17 @@ export default function FarmSelectPage() {
                   <Autocomplete
                     options={districtOptions}
                     value={field.value || null}
+                    freeSolo
                     onChange={(_, value) => {
                       const nextDistrict = value ?? '';
-                      field.onChange(nextDistrict);
+                      field.onChange(String(nextDistrict));
                       setValue('village', '', { shouldValidate: true });
+                    }}
+                    onInputChange={(_, value, reason) => {
+                      if (reason === 'input') {
+                        field.onChange(value);
+                        setValue('village', '', { shouldValidate: true });
+                      }
                     }}
                     renderInput={(params) => (
                       <TextField
@@ -247,7 +251,7 @@ export default function FarmSelectPage() {
                         helperText={
                           errors.district?.message ??
                           (districtOptions.length === 0
-                            ? 'District list unavailable.'
+                            ? 'District list unavailable, type district manually.'
                             : '')
                         }
                         fullWidth
@@ -264,10 +268,16 @@ export default function FarmSelectPage() {
                   <Autocomplete
                     options={villageOptions}
                     value={field.value || null}
+                    freeSolo
                     onChange={(_, value) => {
-                      field.onChange(value ?? '');
+                      field.onChange(value ? String(value) : '');
                     }}
                     disabled={!selectedDistrict}
+                    onInputChange={(_, value, reason) => {
+                      if (reason === 'input') {
+                        field.onChange(value);
+                      }
+                    }}
                     renderInput={(params) => (
                       <TextField
                         {...params}
