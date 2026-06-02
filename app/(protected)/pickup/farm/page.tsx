@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import Stack from '@mui/material/Stack';
@@ -28,15 +28,50 @@ export default function FarmSelectPage() {
   const farms = useLiveQuery(() => getAllFarms(), [], []);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selected, setSelected] = useState<FarmRecord | null>(null);
+  const [locationData, setLocationData] = useState<
+    Array<{ kabupaten?: string; desa?: string }>
+  >([]);
 
   useEffect(() => {
     void refreshFarmsCache();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadLocationData = async () => {
+      try {
+        const apiBaseUrl =
+          process.env.NEXT_PUBLIC_API_URL ??
+          'https://processing-facility-backend.onrender.com';
+        const res = await fetch(`${apiBaseUrl}/api/location`, {
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as Array<{
+          kabupaten?: string;
+          desa?: string;
+        }>;
+        if (active) {
+          setLocationData(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        if (active) {
+          setLocationData([]);
+        }
+      }
+    };
+    void loadLocationData();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const {
     control,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<FarmFormValues>({
     resolver: zodResolver(farmSchema),
@@ -68,6 +103,33 @@ export default function FarmSelectPage() {
   const onSelectFarm = () => {
     if (selected) void startPickup(selected);
   };
+
+  const selectedDistrict = watch('district');
+  const districtOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          locationData
+            .map((item) => item.kabupaten)
+            .filter((value): value is string => Boolean(value))
+        ),
+      ].sort(),
+    [locationData]
+  );
+  const villageOptions = useMemo(
+    () =>
+      !selectedDistrict
+        ? []
+        : [
+            ...new Set(
+              locationData
+                .filter((item) => item.kabupaten === selectedDistrict)
+                .map((item) => item.desa)
+                .filter((value): value is string => Boolean(value))
+            ),
+          ].sort(),
+    [locationData, selectedDistrict]
+  );
 
   const onCreateFarm = handleSubmit(async (values) => {
     const localId = uuidv4();
@@ -166,30 +228,63 @@ export default function FarmSelectPage() {
                 )}
               />
               <Controller
-                name="village"
+                name="district"
                 control={control}
                 render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="Village"
-                    error={!!errors.village}
-                    helperText={errors.village?.message}
-                    fullWidth
-                    required
+                  <Autocomplete
+                    options={districtOptions}
+                    value={field.value || null}
+                    onChange={(_, value) => {
+                      const nextDistrict = value ?? '';
+                      field.onChange(nextDistrict);
+                      setValue('village', '', { shouldValidate: true });
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="District"
+                        error={!!errors.district}
+                        helperText={
+                          errors.district?.message ??
+                          (districtOptions.length === 0
+                            ? 'District list unavailable.'
+                            : '')
+                        }
+                        fullWidth
+                        required
+                      />
+                    )}
                   />
                 )}
               />
               <Controller
-                name="district"
+                name="village"
                 control={control}
                 render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label="District"
-                    error={!!errors.district}
-                    helperText={errors.district?.message}
-                    fullWidth
-                    required
+                  <Autocomplete
+                    options={villageOptions}
+                    value={field.value || null}
+                    onChange={(_, value) => {
+                      field.onChange(value ?? '');
+                    }}
+                    disabled={!selectedDistrict}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Village"
+                        error={!!errors.village}
+                        helperText={
+                          errors.village?.message ??
+                          (!selectedDistrict
+                            ? 'Select district first'
+                            : villageOptions.length === 0
+                              ? 'No villages found for selected district'
+                              : '')
+                        }
+                        fullWidth
+                        required
+                      />
+                    )}
                   />
                 )}
               />
